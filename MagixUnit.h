@@ -1,4 +1,4 @@
-#pragma once
+п»ї#pragma once
 
 #define CONTROL_RELATIVE 1
 #define CONTROL_ABSOLUTE 2
@@ -122,15 +122,15 @@ public:
 	void destroyUnit(SceneManager *sceneMgr);
 	void setMaterial(const String &matName);
 
-	// Новая версия с отдельным цветом для чёлки (12 параметров)
+	// пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ (12 пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ)
 	void setColours(const ColourValue &pelt, const ColourValue &underfur, const ColourValue &mane, const ColourValue &tuft, const ColourValue &nose, const ColourValue &eyeTop, const ColourValue &eyeBot,
 		const ColourValue &ears, const ColourValue &tailtip, const ColourValue &eyes, const ColourValue &wing, const ColourValue &marking);
 
-	
+
 	void setColours(const ColourValue &pelt, const ColourValue &underfur, const ColourValue &mane, const ColourValue &nose, const ColourValue &eyeTop, const ColourValue &eyeBot,
 		const ColourValue &ears, const ColourValue &tailtip, const ColourValue &eyes, const ColourValue &wing, const ColourValue &marking);
 
-	// ДОБАВЛЯЕМ ЗДЕСЬ НОВЫЙ МЕТОД:
+	// пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅ:
 	void setMarkingColours(const ColourValue &bodyMark1, const ColourValue &bodyMark2, const ColourValue &bodyMark3,
 		const ColourValue &headMark1, const ColourValue &headMark2, const ColourValue &headMark3,
 		const ColourValue &tailMark1, const ColourValue &tailMark2, const ColourValue &tailMark3);
@@ -224,7 +224,7 @@ public:
 	Entity* getWingEnt();
 	Entity* getTuftEnt();
 
-	// Методы для доступа к ентити экипировки
+	// пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅ пїЅ пїЅпїЅпїЅпїЅпїЅпїЅ пїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅпїЅ
 	Entity* getEquipEnt(unsigned short slot);
 	void setEquipEnt(unsigned short slot, Entity* ent);
 
