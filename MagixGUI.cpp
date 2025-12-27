@@ -173,6 +173,9 @@ void MagixGUI::initialize(SceneManager *sceneMgr, RenderWindow *window, MagixExt
 
 	mMiniMap->show(false);
 
+	// Инициализация часов 
+	initializeClock();
+
 	//Target Indicator
 	mTargetIndicator = sceneMgr->createBillboardSet("TargetIndicator", 1);
 	mTargetIndicator->setMaterialName("GUIMat/TargetIndicator");
@@ -615,21 +618,21 @@ void MagixGUI::initializeEmojis()
 
 String MagixGUI::replaceEmojisInText(const String& text)
 {
-		if (!mEmojisInitialized || text.empty() || mEmojiReplaceOrder.empty()) {
-			return text;
-		}
+	if (!mEmojisInitialized || text.empty() || mEmojiReplaceOrder.empty()) {
+		return text;
+	}
 
-		// Быстрый выход если нет потенциальных смайликов
-		bool hasPotentialEmoji = false;
-		for (const auto& emoji : mEmojiReplaceOrder) {
-			if (text.find(emoji) != String::npos) {
-				hasPotentialEmoji = true;
-				break;
-			}
+	// Быстрый выход если нет потенциальных смайликов
+	bool hasPotentialEmoji = false;
+	for (const auto& emoji : mEmojiReplaceOrder) {
+		if (text.find(emoji) != String::npos) {
+			hasPotentialEmoji = true;
+			break;
 		}
-		if (!hasPotentialEmoji) return text;
+	}
+	if (!hasPotentialEmoji) return text;
 
-		String result = text;
+	String result = text;
 
 	// Сначала заменяем длинные последовательности (типа :sob:, :rofl:)
 	for (const auto& emojiSeq : mEmojiReplaceOrder) {
@@ -720,6 +723,118 @@ void MagixGUI::loadEmojisFromConfig()
 }
 
 
+void MagixGUI::initializeClock()
+{
+	LogManager::getSingleton().logMessage("=== INITIALIZING CLOCK ===");
+
+	// Создаем overlay для часов
+	Overlay* clockOverlay = OverlayManager::getSingleton().create("ClockOverlay");
+	clockOverlay->setZOrder(650);
+
+	// Создаем панель для часов
+	OverlayContainer* panel = static_cast<OverlayContainer*>(
+		OverlayManager::getSingleton().createOverlayElement("Panel", "ClockPanel"));
+	panel->setMetricsMode(GMM_PIXELS);
+	panel->setPosition(10, 10); // Верхний левый угол
+	panel->setDimensions(100, 30);
+
+	// Создаем текстовый элемент
+	mClockDisplay = static_cast<TextAreaOverlayElement*>(
+		OverlayManager::getSingleton().createOverlayElement("TextArea", "ClockText"));
+	mClockDisplay->setMetricsMode(GMM_PIXELS);
+	mClockDisplay->setPosition(0, 0);
+	mClockDisplay->setDimensions(100, 30);
+	mClockDisplay->setParameter("font_name", "BlueHighway");
+	mClockDisplay->setParameter("char_height", "16");
+	mClockDisplay->setColour(ColourValue::White);
+	mClockDisplay->setCaption("00:00");
+
+	panel->addChild(mClockDisplay);
+	clockOverlay->add2D(panel);
+
+	// Инициализация
+	mClockVisible = true;
+	clockOverlay->show();
+
+	LogManager::getSingleton().logMessage("=== CLOCK INITIALIZED ===");
+}
+
+void MagixGUI::updateClock()
+{
+	// Проверяем, нужно ли обновлять часы
+	if (!mClockVisible || !mClockDisplay || !mSkyManager)
+	{
+		// Для отладки
+		static bool warned = false;
+		if (!warned)
+		{
+			LogManager::getSingleton().logMessage("WARNING: Clock not ready!");
+			warned = true;
+		}
+		return;
+	}
+
+	// Получаем время из SkyManager
+	Real skyTime = mSkyManager->getDayTime();  // 0-2400 единиц
+
+	// Конвертируем в часы и минуты
+	// 2400 единиц = 24 часа => 100 единиц = 1 час
+	float totalHours = skyTime / 100.0f;
+	int hours = static_cast<int>(totalHours);
+	int minutes = static_cast<int>((totalHours - hours) * 60.0f);
+
+	// Форматируем строку
+	char timeBuffer[6];
+	sprintf(timeBuffer, "%02d:%02d", hours, minutes);
+
+	// Обновляем отображение
+	mClockDisplay->setCaption(timeBuffer);
+
+	// Для отладки (логируем каждые 30 игровых минут)
+	static int lastHalfHour = -1;
+	int currentHalfHour = hours * 2 + (minutes >= 30 ? 1 : 0);
+	if (currentHalfHour != lastHalfHour)
+	{
+		lastHalfHour = currentHalfHour;
+		LogManager::getSingleton().logMessage("Game time updated: " + String(timeBuffer));
+	}
+}
+
+void MagixGUI::toggleClock()
+{
+	mClockVisible = !mClockVisible;
+
+	Overlay* clockOverlay = OverlayManager::getSingleton().getByName("ClockOverlay");
+	if (clockOverlay)
+	{
+		if (mClockVisible)
+			clockOverlay->show();
+		else
+			clockOverlay->hide();
+	}
+
+	LogManager::getSingleton().logMessage("Clock visibility: " +
+		StringConverter::toString(mClockVisible));
+}
+// Переключение видимости часов
+void MagixGUI::toggleClock()
+{
+	mClockVisible = !mClockVisible;
+
+	Overlay* clockOverlay = OverlayManager::getSingleton().getByName("GUIOverlay/Clock");
+	if (clockOverlay)
+	{
+		if (mClockVisible)
+			clockOverlay->show();
+		else
+			clockOverlay->hide();
+	}
+}
+// Получение текущего игрового времени
+unsigned short MagixGUI::getGameTime() const
+{
+	return mGameTimeMinutes;
+}
 
 void MagixGUI::printAvailableEmojis()
 {
@@ -1490,6 +1605,7 @@ void MagixGUI::update(const FrameEvent &evt)
 	}
 	mMiniMap->update(mCursor->isVisible(), cursorX, cursorY, evt);
 	updateCompositors();
+	updateClock();
 
 	if (!mGameStateManager->isCampaign())
 	{
