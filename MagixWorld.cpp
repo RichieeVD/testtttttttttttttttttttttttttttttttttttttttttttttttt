@@ -3,6 +3,7 @@
 #include "MagixConst.h"
 #include "MagixCritter.h"
 #include "MagixCritterManager.h"
+#include <algorithm> 
 
 MagixWorld::MagixWorld()
 {
@@ -83,7 +84,7 @@ void MagixWorld::initialize(SceneManager* sceneMgr, RenderWindow* window, MagixE
 	mCollisionManager = collisionMgr;
 	mSkyManager = skyMgr;
 	mMainCamera = mainCam;
-	mCritterManager = critterMgr; 
+	mCritterManager = critterMgr;
 
 	// Создаем ray query для определения позиции воды
 	mRayQuery = sceneMgr->createRayQuery(Ray());
@@ -186,6 +187,71 @@ void MagixWorld::update()
 		}
 	}
 }
+// Добавьте эти функции в начало MagixWorld.cpp, перед loadWorld
+
+void MagixWorld::clearOldImpostors()
+{
+#ifdef _WIN32
+	// Удаляем старые импостеры из корневой папки
+	WIN32_FIND_DATA findFileData;
+	HANDLE hFind;
+
+	// Ищем файлы Impostor.*.png
+	hFind = FindFirstFile("Impostor.*.png", &findFileData);
+	if (hFind != INVALID_HANDLE_VALUE)
+	{
+		do {
+			String filename = findFileData.cFileName;
+			// Удаляем файлы импостеров
+			DeleteFile(filename.c_str());
+		} while (FindNextFile(hFind, &findFileData) != 0);
+		FindClose(hFind);
+	}
+
+	// Также ищем файлы типа Impostor.*.*.png
+	hFind = FindFirstFile("Impostor.*.*.png", &findFileData);
+	if (hFind != INVALID_HANDLE_VALUE)
+	{
+		do {
+			String filename = findFileData.cFileName;
+			DeleteFile(filename.c_str());
+		} while (FindNextFile(hFind, &findFileData) != 0);
+		FindClose(hFind);
+	}
+#endif
+}
+
+void MagixWorld::moveImpostorsToFolder()
+{
+#ifdef _WIN32
+	// Если нет имени мира, ничего не делаем
+	if (worldName.empty())
+		return;
+
+	// Создаем папку для импостеров текущего мира
+	String folderName = "impostors_" + worldName;
+	CreateDirectory(folderName.c_str(), NULL);
+
+	WIN32_FIND_DATA findFileData;
+	HANDLE hFind;
+
+	// Перемещаем ВСЕ файлы импостеров в папку
+	hFind = FindFirstFile("Impostor.*", &findFileData);
+	if (hFind != INVALID_HANDLE_VALUE)
+	{
+		do {
+			String oldName = findFileData.cFileName;
+			String newName = folderName + "/" + oldName;
+
+			// Перемещаем файл
+			MoveFile(oldName.c_str(), newName.c_str());
+
+		} while (FindNextFile(hFind, &findFileData) != 0);
+		FindClose(hFind);
+	}
+#endif
+}
+
 void MagixWorld::loadWorld(const String &name)
 {
 	String tTerrain = "", tGrassMat = "", tGrassMap = "", tGrassColourMap = "", tTree1 = "", tTree2 = "", tTree3 = "", tBush1 = "", tBush2 = "", tBush3 = "";
@@ -556,48 +622,44 @@ void MagixWorld::loadWorld(const String &name)
 		Entity *tree2 = 0;
 		Entity *tree3 = 0;
 		bool hasLargeTrees = false;
+
+		// УДАЛЯЕМ СТАРЫЕ ИМПОСТЕРЫ ПЕРЕД ЗАГРУЗКОЙ НОВОГО МИРА
+		clearOldImpostors();
+
 		if (mDef->pagedGeometryOn)
 		{
+			// ПРОСТОЙ РАБОЧИЙ ВАРИАНТ - без сложных настроек
 			mTrees = new PagedGeometry();
-			mTrees->setCamera(camera);	//Set the camera so PagedGeometry knows how to calculate LODs
-			mTrees->setPageSize(250);	//Set the size of each page of geometry
-			//mTrees->setInfinite();		//Use infinite paging mode
+			mTrees->setCamera(camera);
+			mTrees->setPageSize(250);
 
-			// ДОБАВЛЕНО: МНОГО УРОВНЕЙ ДЕТАЛИЗАЦИИ ДЛЯ ДЕРЕВЬЕВ
-			mTrees->addDetailLevel<BatchPage>(300, 60);           // 0-150: 3D деревья (близко)
-			mTrees->addDetailLevel<BatchPage>(600, 100);        // 150-300: 3D деревья (средне)
-			mTrees->addDetailLevel<ImpostorPage>(1200, 150);    // 300-800: импостеры (далеко)
-			mTrees->addDetailLevel<ImpostorPage>(2500, 200);    // 800-2000: импостеры (очень далеко)
+			// УРОВНИ ДЕТАЛИЗАЦИИ ДЛЯ ДЕРЕВЬЕВ - оригинальный код
+			mTrees->addDetailLevel<BatchPage>(300, 60);
+			mTrees->addDetailLevel<BatchPage>(600, 100);
+			mTrees->addDetailLevel<ImpostorPage>(1200, 150);
+			mTrees->addDetailLevel<ImpostorPage>(2500, 200);
 
-			//Create a new TreeLoader2D object
+			// СОЗДАЕМ TreeLoader2D
 			treeLoader = new TreeLoader2D(mTrees, TBounds(0, 0, worldSize.x, worldSize.y));
-			mTrees->setPageLoader(treeLoader);	//Assign the "treeLoader" to be used to load geometry for the PagedGeometry instance
-
-			//Supply a height function to TreeLoader2D so it can calculate tree Y values
-			//HeightFunction::initialize(mSceneMgr);
+			mTrees->setPageLoader(treeLoader);
 			treeLoader->setHeightFunction(&HeightFunction::getTerrainHeight);
 
 			mLargeTrees = new PagedGeometry(camera, 250);
-			// ДОБАВЛЕНО: МНОГО УРОВНЕЙ ДЛЯ БОЛЬШИХ ДЕРЕВЬЕВ
-			mLargeTrees->addDetailLevel<BatchPage>(400, 80);      // 0-200: 3D большие деревья
-			mLargeTrees->addDetailLevel<BatchPage>(800, 120);    // 200-400: 3D большие деревья  
-			mLargeTrees->addDetailLevel<ImpostorPage>(1500, 180);  // 400-1000: импостеры больших деревьев
-			mLargeTrees->addDetailLevel<ImpostorPage>(3000, 250); // 1000-2500: импостеры (очень далеко)
+
+			// УРОВНИ ДЕТАЛИЗАЦИИ ДЛЯ БОЛЬШИХ ДЕРЕВЬЕВ
+			mLargeTrees->addDetailLevel<BatchPage>(400, 80);
+			mLargeTrees->addDetailLevel<BatchPage>(800, 120);
+			mLargeTrees->addDetailLevel<ImpostorPage>(1500, 180);
+			mLargeTrees->addDetailLevel<ImpostorPage>(3000, 250);
 
 			largeTreeLoader = new TreeLoader2D(mLargeTrees, TBounds(0, 0, worldSize.x, worldSize.y));
 			mLargeTrees->setPageLoader(largeTreeLoader);
-
-			//HeightFunction::initialize(mSceneMgr);
 			largeTreeLoader->setHeightFunction(&HeightFunction::getTerrainHeight);
 
-			//[NOTE] This sets the color map, or lightmap to be used for trees. All trees will be colored according
-			//to this texture. In this case, the shading of the terrain is used so trees will be shadowed
-			//just as the terrain is (this should appear like the terrain is casting shadows on the trees).
-			//You may notice that TreeLoader2D / TreeLoader3D doesn't have a setMapBounds() function as GrassLoader
-			//does. This is because the bounds you specify in the TreeLoader2D constructor are used to apply
-			//the color map.
-			//treeLoader->setColorMap("terrain_lightmap.jpg");
+			// ПОСЛЕ ЗАГРУЗКИ ПЕРЕМЕЩАЕМ ИМПОСТЕРЫ В ПАПКУ
+			// Это вызовется позже, после загрузки всех деревьев
 		}
+
 		//Random Trees
 		if (tTree1 != ""){ tree1 = mSceneMgr->createEntity("Tree1", tTree1); numTreeMeshes++; }
 		if (tTree2 != ""){ tree2 = mSceneMgr->createEntity("Tree2", tTree2); numTreeMeshes++; }
@@ -1110,6 +1172,40 @@ void MagixWorld::addWaterPlane(const Vector3 &position, const Real &scaleX, cons
 
 	if (playSound != "" && playSound != "no sound")
 		mSoundManager->playLoopedSound(playSound.c_str(), waterNode);
+
+	// =========== СИСТЕМА ЛЬДА - СОХРАНЯЕМ ИНФОРМАЦИЮ О ВОДНОЙ ПЛОСКОСТИ ===========
+	WaterPlaneInfo info;
+	info.position = position;
+	info.scaleX = scaleX * 500;  // переводим в реальные размеры (WaterPlaneMesh = 500x500)
+	info.scaleZ = scaleZ * 500;
+	info.material = matName;
+	info.isSolid = tIsSolid;
+
+	// ОПРЕДЕЛЯЕМ ТРЕНИЕ ПО МАТЕРИАЛУ (ИСПРАВЛЕННЫЕ ЗНАЧЕНИЯ)
+	if (matName.find("ice") != String::npos ||
+		matName.find("Ice") != String::npos ||
+		matName == "def_icewater" ||
+		matName == "def_icywater" ||
+		matName == "Terrain/FrozenWater")
+	{
+		info.friction = 0.3f;  // ОЧЕНЬ МАЛЕНЬКОЕ трение на льду = ОЧЕНЬ СКОЛЬЗКО
+	}
+	else if (matName.find("magma") != String::npos ||
+		matName.find("Magma") != String::npos ||
+		matName == "def_magmawatersmall" ||
+		matName == "def_magmawaterlarge" ||
+		matName == "Terrain/Magma" ||
+		matName == "Terrain/LargeMagma")
+	{
+		info.friction = 0.8f;  // Меньше трения на магме = немного скользко
+	}
+	else
+	{
+		info.friction = 1.0f;  // НОРМАЛЬНОЕ трение на обычной поверхности
+	}
+
+	waterPlanesInfo.push_back(info);
+	// =========== КОНЕЦ СИСТЕМЫ ЛЬДА ===========
 }
 
 void MagixWorld::addObject(const String &meshName, const Vector3 &position, const Vector3 &scale, const Real &pitch, const Real &yaw, const Real &roll, const String &playSound, const String &matName)
@@ -1433,4 +1529,82 @@ SceneNode* MagixWorld::getNearestCraftingStation(const Vector3& playerPos)
 	}
 	return nearest;
 }
-// === КОНЕЦ КРАФТ СИСТЕМЫ === //= ///
+// === КОНЕЦ КРАФТ СИСТЕМЫ === //
+Real MagixWorld::getSurfaceFrictionAtPosition(const Vector3 &position)
+{
+	Real friction = 1.0f;  // по умолчанию нормальное трение (земля)
+
+	for (size_t i = 0; i < waterPlanesInfo.size(); i++)
+	{
+		WaterPlaneInfo &info = waterPlanesInfo[i];
+
+		// ПРАВИЛЬНЫЙ РАСЧЕТ ГРАНИЦ водной плоскости
+		Real halfWidthX = info.scaleX / 2.0f;
+		Real halfWidthZ = info.scaleZ / 2.0f;
+
+		// Границы водной плоскости по X и Z
+		Real minX = info.position.x - halfWidthX;
+		Real maxX = info.position.x + halfWidthX;
+		Real minZ = info.position.z - halfWidthZ;
+		Real maxZ = info.position.z + halfWidthZ;
+
+		// Проверяем, находится ли позиция в пределах водной плоскости по XZ
+		bool inXZ = (position.x >= minX && position.x <= maxX &&
+			position.z >= minZ && position.z <= maxZ);
+
+		// Проверяем высоту: игрок должен быть близко к поверхности воды
+		// Более гибкая проверка высоты
+		bool inY = (position.y >= info.position.y - 20.0f &&
+			position.y <= info.position.y + 50.0f);
+
+		if (inXZ && inY)
+		{
+			// Определяем, насколько близко к краю (для плавного перехода)
+			Real distToEdgeX = std::min<Real>(fabs(position.x - minX),
+				fabs(position.x - maxX));
+			Real distToEdgeZ = std::min<Real>(fabs(position.z - minZ),
+				fabs(position.z - maxZ));
+
+			// Расстояние до ближайшего края
+			Real distToEdge = std::min<Real>(distToEdgeX, distToEdgeZ);
+
+			// Если близко к краю (в пределах 10% от размера), делаем плавный переход
+			Real edgeThreshold = std::min<Real>(halfWidthX, halfWidthZ) * 0.1f;
+
+			if (distToEdge < edgeThreshold)
+			{
+				// Плавное смешивание от специального трения к нормальному
+				Real blendFactor = distToEdge / edgeThreshold;
+				friction = info.friction + (1.0f - info.friction) * blendFactor;
+			}
+			else
+			{
+				friction = info.friction;
+			}
+
+			// Отладка
+			static int debugCounter = 0;
+			if (debugCounter++ % 60 == 0) // Каждые 60 кадров
+			{
+				const char* surfaceType = "NORMAL";
+				if (friction < 0.4f) surfaceType = "ICE";
+				else if (friction < 0.9f) surfaceType = "MAGMA";
+
+				printf("SURFACE: %s at [%.1f, %.1f, %.1f], Friction=%.2f\n",
+					surfaceType, position.x, position.y, position.z, friction);
+			}
+
+			return friction; // Возвращаем сразу, первая найденная зона
+		}
+	}
+
+	// Если не на воде - возвращаем трение для земли
+	// Можете здесь добавить проверку других типов поверхностей
+	return friction;
+}
+
+bool MagixWorld::isPositionOnIce(const Vector3 &position)
+{
+	Real friction = getSurfaceFrictionAtPosition(position);
+	return (friction < 0.4f);  // считаем льдом если трение меньше 0.4
+}
