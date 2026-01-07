@@ -1,0 +1,437 @@
+MagixGUI::~MagixGUI()
+{
+	cleanupEmojis();
+	delete mChatManager;
+	delete mCharScreenManager;
+	delete mInputManager;
+	delete mAlertBox;
+	delete mMiniMap;
+	if (mRayQuery)delete mRayQuery;
+}
+
+void MagixGUI::initialize(SceneManager *sceneMgr, RenderWindow *window, MagixExternalDefinitions *def, MagixGameStateManager *gameStateMgr, MagixItemManager *itemManager, MagixCritterManager *critterMgr, MagixUnitManager *unitManager, MagixNetworkManager *networkManager, MagixCamera *camera, MagixSoundManager *soundMgr, MagixEffectsManager *effectsMgr, MagixCollisionManager *collisionMgr)
+{
+	mSceneMgr = sceneMgr;
+	mWindow = window;
+	mDef = def;
+	mGameStateManager = gameStateMgr;
+	mItemManager = itemManager;
+	mCritterManager = critterMgr;
+	mUnitManager = unitManager;
+	mNetworkManager = networkManager;
+	mCamera = camera;
+	mSoundManager = soundMgr;
+	mEffectsManager = effectsMgr;
+	mRayQuery = sceneMgr->createRayQuery(Ray());
+	mAlertBox->initialize();
+
+	// Инициализация системы смайликов
+	initializeEmojis();
+
+	//MiniMap
+	mMiniMap->initialize(def, unitManager, collisionMgr, camera);
+	mButton[BUTTON_MINIMAP1] = OverlayManager::getSingleton().getOverlayElement("GUI/MiniMapButton1");
+	mButtonText[BUTTON_MINIMAP1] = OverlayManager::getSingleton().getOverlayElement("GUI/MiniMapButtonText1");
+	mButton[BUTTON_MINIMAP2] = OverlayManager::getSingleton().getOverlayElement("GUI/MiniMapButton2");
+	mButtonText[BUTTON_MINIMAP2] = OverlayManager::getSingleton().getOverlayElement("GUI/MiniMapButtonText2");
+
+	mMiniMap->show(false);
+
+	// Инициализация часов 
+	createEmergencyClock();
+	initializeClock();
+
+	//Target Indicator
+	mTargetIndicator = sceneMgr->createBillboardSet("TargetIndicator", 1);
+	mTargetIndicator->setMaterialName("GUIMat/TargetIndicator");
+	mTargetIndicator->setDefaultDimensions(7, 7);
+	mTargetIndicator->createBillboard(Vector3(0, 0, 0), ColourValue(1, 1, 1, 1));
+	mTargetIndicator->setQueryFlags(EFFECT_MASK);
+	mTargetIndicator->setCommonDirection(Vector3::UNIT_Y);
+	mTargetIndicator->setCommonUpVector(Vector3::UNIT_X);
+	mTargetIndicator->setVisible(true);
+	mTargetIndicatorNode = sceneMgr->getRootSceneNode()->createChildSceneNode();
+	mTargetIndicatorNode->attachObject(mTargetIndicator);
+
+	//Fader
+	mFader = OverlayManager::getSingleton().getOverlayElement("GUI/Fader");
+	fadeOut(0);
+	showFaderOverlay(false);
+
+	//PseudoShader
+	mPseudoShader = OverlayManager::getSingleton().getOverlayElement("GUI/PseudoShader");
+	showPseudoShaderOverlay(false);
+
+	//Cursor
+	mCursor = OverlayManager::getSingleton().getOverlayElement("GUI/Cursor");
+	mCursor->setPosition(400, 300);
+	cursorX = 0.5;
+	cursorY = 0.5;
+
+	showCursorOverlay(false);
+
+	//Credits
+	mButton[BUTTON_GAMEOVERCONTINUE] = OverlayManager::getSingleton().getOverlayElement("GUI/GameOverContinueButton");
+	mButtonText[BUTTON_GAMEOVERCONTINUE] = OverlayManager::getSingleton().getOverlayElement("GUI/GameOverContinueButtonText");
+	mButton[BUTTON_GAMEOVERQUIT] = OverlayManager::getSingleton().getOverlayElement("GUI/GameOverQuitButton");
+	mButtonText[BUTTON_GAMEOVERQUIT] = OverlayManager::getSingleton().getOverlayElement("GUI/GameOverQuitButtonText");
+
+	showCreditsOverlay(false);
+
+	//Backdrop
+	mBackdrop = OverlayManager::getSingleton().getOverlayElement("GUI/Backdrop");
+	OverlayManager::getSingleton().getOverlayElement("GUI/CinematicCaption")->hide();
+
+	showBackdropOverlay(false);
+
+	//HP Panel
+	mHPBar = OverlayManager::getSingleton().getOverlayElement("GUI/HPBar");
+	mSkillText = OverlayManager::getSingleton().getOverlayElement("GUI/SkillText");
+	mPickupText = OverlayManager::getSingleton().getOverlayElement("GUI/PickupText");
+
+	showHPPanelOverlay(false);
+
+	//Target Panel
+	mTargetPanel = OverlayManager::getSingleton().getOverlayElement("GUI/TargetPanel");
+	mTargetHP = OverlayManager::getSingleton().getOverlayElement("GUI/TargetHP");
+
+	showTargetPanelOverlay(false);
+
+	//Options
+	mBox[GUI_OPTIONS] = OverlayManager::getSingleton().getOverlayElement("GUI/Options");
+	mButton[BUTTON_OPTIONRESUME] = OverlayManager::getSingleton().getOverlayElement("GUI/OptionResumeButton");
+	mButtonText[BUTTON_OPTIONRESUME] = OverlayManager::getSingleton().getOverlayElement("GUI/OptionResumeButtonText");
+	mButton[BUTTON_OPTIONSETTINGS] = OverlayManager::getSingleton().getOverlayElement("GUI/OptionSettingsButton");
+	mButtonText[BUTTON_OPTIONSETTINGS] = OverlayManager::getSingleton().getOverlayElement("GUI/OptionSettingsButtonText");
+	mButton[BUTTON_OPTIONINTERFACE] = OverlayManager::getSingleton().getOverlayElement("GUI/OptionInterfaceButton");
+	mButtonText[BUTTON_OPTIONINTERFACE] = OverlayManager::getSingleton().getOverlayElement("GUI/OptionInterfaceButtonText");
+	mButton[BUTTON_OPTIONRESTART] = OverlayManager::getSingleton().getOverlayElement("GUI/OptionRestartButton");
+	mButtonText[BUTTON_OPTIONRESTART] = OverlayManager::getSingleton().getOverlayElement("GUI/OptionRestartButtonText");
+	mButton[BUTTON_OPTIONQUIT] = OverlayManager::getSingleton().getOverlayElement("GUI/OptionQuitButton");
+	mButtonText[BUTTON_OPTIONQUIT] = OverlayManager::getSingleton().getOverlayElement("GUI/OptionQuitButtonText");
+
+	mBox[GUI_SETTINGS] = OverlayManager::getSingleton().getOverlayElement("GUI/Settings");
+	for (int i = 0; i<3; i++)
+	{
+		const String tNum = StringConverter::toString(i + 1);
+		mButton[BUTTON_SETTINGS1 + i] = OverlayManager::getSingleton().getOverlayElement("GUI/SettingsButton" + tNum);
+		mButtonText[BUTTON_SETTINGS1 + i] = OverlayManager::getSingleton().getOverlayElement("GUI/SettingsButtonText" + tNum);
+	}
+	mButton[BUTTON_SETTINGSBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/SettingsButtonBack");
+	mButtonText[BUTTON_SETTINGSBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/SettingsButtonBackText");
+	for (int i = 0; i<4; i++)
+	{
+		const String tNum = StringConverter::toString(i + 1);
+		mScroller[SCROLLER_SETTINGS1 + i] = OverlayManager::getSingleton().getOverlayElement("GUI/SettingsSlider" + tNum);
+		mScrollerMarker[SCROLLER_SETTINGS1 + i] = OverlayManager::getSingleton().getOverlayElement("GUI/SettingsSliderMarker" + tNum);
+		isScrollerHorz[SCROLLER_SETTINGS1 + i] = true;
+		setScroll(SCROLLER_SETTINGS1 + i, 1);
+	}
+
+	mBox[GUI_INTERFACE] = OverlayManager::getSingleton().getOverlayElement("GUI/Interface");
+	for (int i = 0; i<8; i++)
+	{
+		const String tNum = StringConverter::toString(i + 1);
+		mButton[BUTTON_INTERFACE1 + i] = OverlayManager::getSingleton().getOverlayElement("GUI/InterfaceButton" + tNum);
+		mButtonText[BUTTON_INTERFACE1 + i] = OverlayManager::getSingleton().getOverlayElement("GUI/InterfaceButtonText" + tNum);
+	}
+	mButton[BUTTON_INTERFACEBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/InterfaceButtonBack");
+	mButtonText[BUTTON_INTERFACEBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/InterfaceButtonBackText");
+	mScroller[SCROLLER_INTERFACE1] = OverlayManager::getSingleton().getOverlayElement("GUI/InterfaceSlider1");
+	mScrollerMarker[SCROLLER_INTERFACE1] = OverlayManager::getSingleton().getOverlayElement("GUI/InterfaceSliderMarker1");
+	isScrollerHorz[SCROLLER_INTERFACE1] = true;
+	setScroll(SCROLLER_INTERFACE1, 1);
+
+	showOptionsOverlay(false);
+
+	//StartScreenGUI
+	mBox[GUI_STARTSCREENBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/StartScreenBox");
+	mButton[BUTTON_NEWGAME] = OverlayManager::getSingleton().getOverlayElement("GUI/StartScreenButton1");
+	mButtonText[BUTTON_NEWGAME] = OverlayManager::getSingleton().getOverlayElement("GUI/StartScreenButtonText1");
+	mButton[BUTTON_MULTIPLAYER] = OverlayManager::getSingleton().getOverlayElement("GUI/StartScreenButton2");
+	mButtonText[BUTTON_MULTIPLAYER] = OverlayManager::getSingleton().getOverlayElement("GUI/StartScreenButtonText2");
+	mButton[BUTTON_QUIT] = OverlayManager::getSingleton().getOverlayElement("GUI/StartScreenButton3");
+	mButtonText[BUTTON_QUIT] = OverlayManager::getSingleton().getOverlayElement("GUI/StartScreenButtonText3");
+
+	OverlayManager::getSingleton().getOverlayElement("GUI/UpdateBox")->hide();
+	OverlayManager::getSingleton().getOverlayElement("GUI/UpdateBoxText")->setCaption(L"" + mDef->UpdateLog);
+
+	showStartScreenOverlay(false);
+
+	//LogonGUI
+	mBox[GUI_LOGONBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/LogonBox");
+	mButton[BUTTON_LOGON1] = OverlayManager::getSingleton().getOverlayElement("GUI/LogonButton1");
+	mButtonText[BUTTON_LOGON1] = OverlayManager::getSingleton().getOverlayElement("GUI/LogonButtonText1");
+	mButton[BUTTON_NEWACCOUNT] = OverlayManager::getSingleton().getOverlayElement("GUI/LogonButton2");
+	mButtonText[BUTTON_NEWACCOUNT] = OverlayManager::getSingleton().getOverlayElement("GUI/LogonButtonText2");
+	mButton[BUTTON_EDITACCOUNT] = OverlayManager::getSingleton().getOverlayElement("GUI/LogonButton3");
+	mButtonText[BUTTON_EDITACCOUNT] = OverlayManager::getSingleton().getOverlayElement("GUI/LogonButtonText3");
+	mButton[BUTTON_LOGONBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/LogonButtonBack");
+	mButtonText[BUTTON_LOGONBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/LogonButtonTextBack");
+	mCheckBox[CHECKBOX_LOGON] = OverlayManager::getSingleton().getOverlayElement("GUI/LogonCheckBox");
+
+	showLogonOverlay(false);
+
+	//CreateAccountGUI
+	mBox[GUI_CREATEACCOUNTBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/CreateAccountBox");
+	mButton[BUTTON_CREATEACCOUNT1] = OverlayManager::getSingleton().getOverlayElement("GUI/CreateAccountButton1");
+	mButtonText[BUTTON_CREATEACCOUNT1] = OverlayManager::getSingleton().getOverlayElement("GUI/CreateAccountButtonText1");
+	mButton[BUTTON_CREATEACCOUNTBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/CreateAccountButtonBack");
+	mButtonText[BUTTON_CREATEACCOUNTBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/CreateAccountButtonTextBack");
+
+	for (int i = 0; i<MAX_CREATEACCOUNTINFO; i++)
+		mCreateAccountTextBox[i] = OverlayManager::getSingleton().getOverlayElement("GUI/CreateAccountText" + StringConverter::toString(i + 1));
+
+	showCreateAccountOverlay(false);
+
+	//EditAccountGUI
+	mBox[GUI_EDITACCOUNTBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/EditAccountBox");
+	mButton[BUTTON_EDITACCOUNT1] = OverlayManager::getSingleton().getOverlayElement("GUI/EditAccountButton1");
+	mButtonText[BUTTON_EDITACCOUNT1] = OverlayManager::getSingleton().getOverlayElement("GUI/EditAccountButtonText1");
+	mButton[BUTTON_EDITACCOUNTBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/EditAccountButtonBack");
+	mButtonText[BUTTON_EDITACCOUNTBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/EditAccountButtonTextBack");
+
+	for (int i = 0; i<MAX_EDITACCOUNTINFO; i++)
+		mEditAccountTextBox[i] = OverlayManager::getSingleton().getOverlayElement("GUI/EditAccountText" + StringConverter::toString(i + 1));
+
+	showEditAccountOverlay(false);
+
+	//CampaignScreenGUI
+	mBox[GUI_CAMPAIGNBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/CampaignBox");
+	mButton[BUTTON_CAMPAIGNBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/CampaignButtonBack");
+	mButtonText[BUTTON_CAMPAIGNBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/CampaignButtonTextBack");
+	mButton[BUTTON_CAMPAIGNNEXT] = OverlayManager::getSingleton().getOverlayElement("GUI/CampaignButtonNext");
+	mButtonText[BUTTON_CAMPAIGNNEXT] = OverlayManager::getSingleton().getOverlayElement("GUI/CampaignButtonTextNext");
+	for (int i = 0; i<3; i++)
+	{
+		const String tNum = StringConverter::toString(i + 1);
+		mButton[BUTTON_CAMPAIGN1 + i] = OverlayManager::getSingleton().getOverlayElement("GUI/CampaignButton" + tNum);
+		mButtonText[BUTTON_CAMPAIGN1 + i] = OverlayManager::getSingleton().getOverlayElement("GUI/CampaignButtonText" + tNum);
+	}
+
+	showCampaignOverlay(false);
+
+	//CharScreenGUI
+	mBox[GUI_CHARSCREENBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenBox");
+	mBoxText[GUI_CHARSCREENBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenNameText");
+	mButton[BUTTON_CHARSCREENBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenButtonBack");
+	mButtonText[BUTTON_CHARSCREENBACK] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenButtonTextBack");
+	mButton[BUTTON_CHARSCREENNEXT] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenButtonNext");
+	mButtonText[BUTTON_CHARSCREENNEXT] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenButtonTextNext");
+	mButton[BUTTON_CHARSCREENDELETE] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenButtonDelete");
+	mButtonText[BUTTON_CHARSCREENDELETE] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenButtonTextDelete");
+	for (int i = 0; i<MAX_CHARSCREENTEXT; i++)
+	{
+		const String tNum = StringConverter::toString(i + 1);
+		mCharScreenText[i] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenText" + tNum);
+		mButton[BUTTON_CHARSCREEN_L1 + i * 2] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenButtonL" + tNum);
+		mButtonText[BUTTON_CHARSCREEN_L1 + i * 2] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenButtonTextL" + tNum);
+		mButton[BUTTON_CHARSCREEN_R1 + i * 2] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenButtonR" + tNum);
+		mButtonText[BUTTON_CHARSCREEN_R1 + i * 2] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenButtonTextR" + tNum);
+		mCharScreenManager->initializeText(i, mCharScreenText[i]);
+		mCharScreenManager->initializeLRButtons(i, mButton[BUTTON_CHARSCREEN_L1 + i * 2], mButton[BUTTON_CHARSCREEN_R1 + i * 2]);
+	}
+	for (int i = 0; i<3; i++)
+	{
+		const String tNum = StringConverter::toString(i + 1);
+		mScroller[SCROLLER_CHARSCREEN1 + i] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenSlider" + tNum);
+		mScrollerMarker[SCROLLER_CHARSCREEN1 + i] = OverlayManager::getSingleton().getOverlayElement("GUI/CharScreenSliderMarker" + tNum);
+		isScrollerHorz[SCROLLER_CHARSCREEN1 + i] = true;
+		mCharScreenManager->initializeSliders(i, mScroller[SCROLLER_CHARSCREEN1 + i], mScrollerMarker[SCROLLER_CHARSCREEN1 + i]);
+	}
+	mCharScreenManager->initialize(mDef, mEffectsManager, mAlertBox, mUnitManager->getPlayer(), sceneMgr, mBoxText[GUI_CHARSCREENBOX], mBackdrop);
+	mCharScreenManager->initializeBackNextButtons(mButton[BUTTON_CHARSCREENBACK], mButton[BUTTON_CHARSCREENNEXT], mButton[BUTTON_CHARSCREENDELETE], mButtonText[BUTTON_CHARSCREENBACK], mButtonText[BUTTON_CHARSCREENNEXT], mButtonText[BUTTON_CHARSCREENDELETE]);
+
+	showCharScreenOverlay(false);
+
+	//Server List
+	mBox[GUI_SERVERBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/ServerBox");
+	mButton[BUTTON_SERVER1] = OverlayManager::getSingleton().getOverlayElement("GUI/ServerButton1");
+	mButtonText[BUTTON_SERVER1] = OverlayManager::getSingleton().getOverlayElement("GUI/ServerButtonText1");
+	mButton[BUTTON_SERVER2] = OverlayManager::getSingleton().getOverlayElement("GUI/ServerButton2");
+	mButtonText[BUTTON_SERVER2] = OverlayManager::getSingleton().getOverlayElement("GUI/ServerButtonText2");
+
+	showServerOverlay(false);
+	//ChatGUI
+	mBox[GUI_TEXTINPUT] = OverlayManager::getSingleton().getOverlayElement("GUI/TextInputBox");
+	mBoxText[GUI_TEXTINPUT] = OverlayManager::getSingleton().getOverlayElement("GUI/TextInputBoxText");
+
+	mBoxText[GUI_TEXTINPUT]->setParameter("font_name", "Tahoma");
+	mButton[BUTTON_TEXTINPUT] = OverlayManager::getSingleton().getOverlayElement("GUI/TextInputBoxButton");
+	mButtonText[BUTTON_TEXTINPUT] = OverlayManager::getSingleton().getOverlayElement("GUI/TextInputBoxButtonText");
+	mButton[BUTTON_TEXTINPUT2] = OverlayManager::getSingleton().getOverlayElement("GUI/TextInputBoxButton2");
+	mButtonText[BUTTON_TEXTINPUT2] = OverlayManager::getSingleton().getOverlayElement("GUI/TextInputBoxButtonText2");
+	mButton[BUTTON_TEXTINPUT3] = OverlayManager::getSingleton().getOverlayElement("GUI/TextInputBoxButton3");
+	mButtonText[BUTTON_TEXTINPUT3] = OverlayManager::getSingleton().getOverlayElement("GUI/TextInputBoxButtonText3");
+
+	mBox[GUI_TEXTOUTPUT] = OverlayManager::getSingleton().getOverlayElement("GUI/TextOutputBox");
+	mBoxText[GUI_TEXTOUTPUT] = OverlayManager::getSingleton().getOverlayElement("GUI/TextOutputBoxText");
+	mBoxText[GUI_TEXTINPUT]->setParameter("font_name", "Tahoma");
+	mButton[BUTTON_TEXTOUTPUT] = OverlayManager::getSingleton().getOverlayElement("GUI/TextOutputBoxButton");
+	mButtonText[BUTTON_TEXTOUTPUT] = OverlayManager::getSingleton().getOverlayElement("GUI/TextOutputBoxButtonText");
+	mSizer[SIZER_TEXTOUTPUT] = OverlayManager::getSingleton().getOverlayElement("GUI/TextOutputBoxSizer");
+	mScroller[SCROLLER_TEXTOUTPUT] = OverlayManager::getSingleton().getOverlayElement("GUI/TextOutputBoxScroller");
+	mScrollerMarker[SCROLLER_TEXTOUTPUT] = OverlayManager::getSingleton().getOverlayElement("GUI/TextOutputBoxScrollerMarker");
+	isScrollerHorz[SCROLLER_TEXTOUTPUT] = false;
+	setScroll(SCROLLER_TEXTOUTPUT, 1);
+
+	showChatOverlay(false);
+
+	//Friend box
+	mBox[GUI_FRIENDBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/FriendBox");
+	mBoxText[GUI_FRIENDBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/FriendBoxText");
+	mButton[BUTTON_FRIENDBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/FriendButton");
+	mButtonText[BUTTON_FRIENDBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/FriendButtonText");
+	mScroller[SCROLLER_FRIENDBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/FriendScroller");
+	mScrollerMarker[SCROLLER_FRIENDBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/FriendScrollerMarker");
+	isScrollerHorz[SCROLLER_FRIENDBOX] = false;
+	setScroll(SCROLLER_FRIENDBOX, 0);
+	mMover[MOVER_FRIENDBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/FriendMover");
+
+	refreshFriendList();
+	showFriendBox(false);
+
+	//Bio box
+	mBox[GUI_BIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/BioBox");
+	mBoxText[GUI_BIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/BioBoxText");
+	mButton[BUTTON_BIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/BioButton");
+	mButtonText[BUTTON_BIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/BioButtonText");
+	mScroller[SCROLLER_BIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/BioScroller");
+	mScrollerMarker[SCROLLER_BIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/BioScrollerMarker");
+	isScrollerHorz[SCROLLER_BIOBOX] = false;
+	setScroll(SCROLLER_BIOBOX, 0);
+	mMover[MOVER_BIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/BioMover");
+
+	showBioBox(false);
+
+	//Target Bio box
+	mBox[GUI_TARGETBIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/TargetBioBox");
+	mBoxText[GUI_TARGETBIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/TargetBioBoxText");
+	mButton[BUTTON_TARGETBIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/TargetBioButton");
+	mButtonText[BUTTON_TARGETBIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/TargetBioButtonText");
+	mScroller[SCROLLER_TARGETBIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/TargetBioScroller");
+	mScrollerMarker[SCROLLER_TARGETBIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/TargetBioScrollerMarker");
+	isScrollerHorz[SCROLLER_TARGETBIOBOX] = false;
+	setScroll(SCROLLER_TARGETBIOBOX, 0);
+	mMover[MOVER_TARGETBIOBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/TargetBioMover");
+
+	showTargetBioBox(false);
+
+	//Home box
+	mBox[GUI_HOMEBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/HomeBox");
+	mButton[BUTTON_HOMEBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/HomeButton");
+	mButtonText[BUTTON_HOMEBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/HomeButtonText");
+	mButton[BUTTON_HOMEBOX1] = OverlayManager::getSingleton().getOverlayElement("GUI/HomeButton1");
+	mButtonText[BUTTON_HOMEBOX1] = OverlayManager::getSingleton().getOverlayElement("GUI/HomeButtonText1");
+	mButton[BUTTON_HOMEBOX2] = OverlayManager::getSingleton().getOverlayElement("GUI/HomeButton2");
+	mButtonText[BUTTON_HOMEBOX2] = OverlayManager::getSingleton().getOverlayElement("GUI/HomeButtonText2");
+	mButton[BUTTON_HOMEBOX3] = OverlayManager::getSingleton().getOverlayElement("GUI/HomeButton3");
+	mButtonText[BUTTON_HOMEBOX3] = OverlayManager::getSingleton().getOverlayElement("GUI/HomeButtonText3");
+	mButton[BUTTON_HOMEBOX4] = OverlayManager::getSingleton().getOverlayElement("GUI/HomeButton4");
+	mButtonText[BUTTON_HOMEBOX4] = OverlayManager::getSingleton().getOverlayElement("GUI/HomeButtonText4");
+
+	mMover[MOVER_HOMEBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/HomeMover");
+
+	showHomeBox(false);
+
+	//Emote box
+	mBox[GUI_EMOTEBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/EmoteBox");
+	mBoxText[GUI_EMOTEBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/EmoteBoxText");
+	mButton[BUTTON_EMOTEBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/EmoteButton");
+	mButtonText[BUTTON_EMOTEBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/EmoteButtonText");
+	mScroller[SCROLLER_EMOTEBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/EmoteScroller");
+	mScrollerMarker[SCROLLER_EMOTEBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/EmoteScrollerMarker");
+	isScrollerHorz[SCROLLER_EMOTEBOX] = false;
+	setScroll(SCROLLER_EMOTEBOX, 0);
+	mMover[MOVER_EMOTEBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/EmoteMover");
+
+	showEmoteBox(false);
+
+	//Item box
+	mBox[GUI_ITEMBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/ItemBox");
+	mBoxText[GUI_ITEMBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/ItemBoxText");
+	mButton[BUTTON_ITEMBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/ItemButton");
+	mButtonText[BUTTON_ITEMBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/ItemButtonText");
+	mButton[BUTTON_ITEMBOX1] = OverlayManager::getSingleton().getOverlayElement("GUI/ItemButton1");
+	mButtonText[BUTTON_ITEMBOX1] = OverlayManager::getSingleton().getOverlayElement("GUI/ItemButtonText1");
+	mMover[MOVER_ITEMBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/ItemMover");
+
+	showItemBox(false);
+
+	// Stash box
+	mBox[GUI_STASHBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/StashBox");
+	mBoxText[GUI_STASHBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/StashBoxText");
+	mButton[BUTTON_STASHBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/StashButton");
+	mButtonText[BUTTON_STASHBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/StashButtonText");
+	mMover[MOVER_STASHBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/StashMover");
+	mScroller[SCROLLER_STASHBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/StashScroller");
+	mScrollerMarker[SCROLLER_STASHBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/StashScrollerMarker");
+	isScrollerHorz[SCROLLER_STASHBOX] = false;
+	setScroll(SCROLLER_STASHBOX, 0);
+	mButton[BUTTON_STASHDROP] = OverlayManager::getSingleton().getOverlayElement("GUI/StashDropButton");
+	mButtonText[BUTTON_STASHDROP] = OverlayManager::getSingleton().getOverlayElement("GUI/StashDropButtonText");
+
+	showItemBox(false);
+
+	//Party box
+	mBox[GUI_PARTYBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/PartyBox");
+	mBoxText[GUI_PARTYBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/PartyBoxText");
+	mButton[BUTTON_PARTYBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/PartyButton");
+	mButtonText[BUTTON_PARTYBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/PartyButtonText");
+	mButton[BUTTON_PARTYBOX1] = OverlayManager::getSingleton().getOverlayElement("GUI/PartyButton1");
+	mButtonText[BUTTON_PARTYBOX1] = OverlayManager::getSingleton().getOverlayElement("GUI/PartyButtonText1");
+	mButton[BUTTON_PARTYBOX2] = OverlayManager::getSingleton().getOverlayElement("GUI/PartyButton2");
+	mButtonText[BUTTON_PARTYBOX2] = OverlayManager::getSingleton().getOverlayElement("GUI/PartyButtonText2");
+	mButton[BUTTON_PARTYBOX3] = OverlayManager::getSingleton().getOverlayElement("GUI/PartyButton3");
+	mButtonText[BUTTON_PARTYBOX3] = OverlayManager::getSingleton().getOverlayElement("GUI/PartyButtonText3");
+	mMover[MOVER_PARTYBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/PartyMover");
+
+	mButton[BUTTON_PARTYBOX1]->hide();
+	showPartyBox(false);
+
+	//MultiplayerGUI
+	mBox[GUI_MULTIPLAYER] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerBox");
+	mButton[BUTTON_MULTIPLAYER1] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerButton1");
+	mButtonText[BUTTON_MULTIPLAYER1] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerButtonText1");
+	mButton[BUTTON_MULTIPLAYER2] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerButton2");
+	mButtonText[BUTTON_MULTIPLAYER2] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerButtonText2");
+	mButton[BUTTON_MULTIPLAYER3] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerButton3");
+	mButtonText[BUTTON_MULTIPLAYER3] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerButtonText3");
+	mButton[BUTTON_MULTIPLAYER4] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerButton4");
+	mButtonText[BUTTON_MULTIPLAYER4] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerButtonText4");
+	mButton[BUTTON_MULTIPLAYER5] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerButton5");
+	mButtonText[BUTTON_MULTIPLAYER5] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerButtonText5");
+	mButton[BUTTON_MULTIPLAYER6] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerButton6");
+	mButtonText[BUTTON_MULTIPLAYER6] = OverlayManager::getSingleton().getOverlayElement("GUI/MultiplayerButtonText6");
+
+	showMultiplayerOverlay(false);
+
+	//Select box
+	mSelectPanel = OverlayManager::getSingleton().getOverlayElement("GUI/SelectPanel");
+	mBox[GUI_SELECTBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/SelectBox");
+	mBoxText[GUI_SELECTBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/SelectBoxText");
+	mButton[BUTTON_SELECTBOX1] = OverlayManager::getSingleton().getOverlayElement("GUI/SelectButton1");
+	mButtonText[BUTTON_SELECTBOX1] = OverlayManager::getSingleton().getOverlayElement("GUI/SelectButtonText1");
+	mButton[BUTTON_SELECTBOX2] = OverlayManager::getSingleton().getOverlayElement("GUI/SelectButton2");
+	mButtonText[BUTTON_SELECTBOX2] = OverlayManager::getSingleton().getOverlayElement("GUI/SelectButtonText2");
+	mButton[BUTTON_SELECTBOX3] = OverlayManager::getSingleton().getOverlayElement("GUI/SelectButton3");
+	mButtonText[BUTTON_SELECTBOX3] = OverlayManager::getSingleton().getOverlayElement("GUI/SelectButtonText3");
+	mButton[BUTTON_SELECTBOX4] = OverlayManager::getSingleton().getOverlayElement("GUI/SelectButton4");
+	mButtonText[BUTTON_SELECTBOX4] = OverlayManager::getSingleton().getOverlayElement("GUI/SelectButtonText4");
+
+	showSelectPanel(false);
+
+	//List Select box
+	mListSelectHighlight = OverlayManager::getSingleton().getOverlayElement("GUI/ListSelectHighlight");
+	mBox[GUI_LISTSELECTBOX] = OverlayManager::getSingleton().getOverlayElement("GUI/ListSelectBox");
+	mButton[BUTTON_LISTSELECT1] = OverlayManager::getSingleton().getOverlayElement("GUI/ListSelectButton1");
+	mButtonText[BUTTON_LISTSELECT1] = OverlayManager::getSingleton().getOverlayElement("GUI/ListSelectButtonText1");
+	mButton[BUTTON_LISTSELECT2] = OverlayManager::getSingleton().getOverlayElement("GUI/ListSelectButton2");
+	mButtonText[BUTTON_LISTSELECT2] = OverlayManager::getSingleton().getOverlayElement("GUI/ListSelectButtonText2");
+	mButton[BUTTON_LISTSELECT3] = OverlayManager::getSingleton().getOverlayElement("GUI/ListSelectButton3");
+	mButtonText[BUTTON_LISTSELECT3] = OverlayManager::getSingleton().getOverlayElement("GUI/ListSelectButtonText3");
+
+	showListSelectBox(false);
+
+	initializeSettings();
+}
